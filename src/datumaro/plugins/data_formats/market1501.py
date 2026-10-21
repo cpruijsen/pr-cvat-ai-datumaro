@@ -13,6 +13,7 @@ from datumaro.components.importer import Importer
 from datumaro.components.media import Image
 from datumaro.util import str_to_bool
 from datumaro.util.image import find_images
+from datumaro.util.os_util import safe_join
 
 
 class Market1501Path:
@@ -64,7 +65,7 @@ class Market1501Base(DatasetBase):
         if osp.isfile(subset_path):
             with open(subset_path, encoding="utf-8") as f:
                 for line in f:
-                    paths.append(osp.join(self._path, line.strip()))
+                    paths.append(safe_join(self._path, line.strip()))
         else:
             paths = list(find_images(subset_path, recursive=True))
 
@@ -141,8 +142,6 @@ class Market1501Exporter(Exporter):
                 pid = item.attributes.get("person_id")
                 match = Market1501Path.PATTERN.fullmatch(item.id)
                 if not match and pid:
-                    # attributes may come as strings or floats
-                    pid = int(float(pid))
                     cid = int(item.attributes.get("camera_id", 0)) + 1
                     tid = int(item.attributes.get("track_id", 1))
                     bbid = int(item.attributes.get("bbox_id", 0))
@@ -151,15 +150,13 @@ class Market1501Exporter(Exporter):
                             "frame_id", max(used_frames.get((pid, cid, tid), [-1])) + 1
                         )
                     )
-                    # the original dataset uses -1 unpadded for junk images
-                    pid_str = str(pid) if pid < 0 else f"{pid:04d}"
                     image_name = osp.join(
-                        osp.dirname(image_name), f"{pid_str}_c{cid}s{tid}_{fid:06d}_{bbid:02d}"
+                        osp.dirname(image_name), f"{pid}_c{cid}s{tid}_{fid:06d}_{bbid:02d}"
                     )
 
                 image_path = self._make_image_filename(item, name=image_name, subdir=dirname)
                 if self._save_media and item.media:
-                    self._save_image(item, osp.join(self._save_dir, image_path))
+                    self._save_image(item, safe_join(self._save_dir, image_path))
 
                 attrs = Market1501Path.PATTERN.search(image_name)
                 if attrs:
@@ -167,7 +164,7 @@ class Market1501Exporter(Exporter):
                     used_frames.setdefault(attrs[0:2], []).append(int(attrs[3]))
                 annotation += "%s\n" % image_path
 
-            annotation_file = osp.join(
+            annotation_file = safe_join(
                 self._save_dir, Market1501Path.LIST_PREFIX + subset_name + ".txt"
             )
             with open(annotation_file, "w", encoding="utf-8") as f:
